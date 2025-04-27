@@ -1,15 +1,47 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import './Auth.css';
 
+
 function Auth({ mode = "login" }) { 
+  const [passwordErrorMsg, setPasswordErrorMsg] = useState("");
+  const [userName, setUserName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const navigate = useNavigate();
 
-  function handleSubmit(e) {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault(); 
     console.log(`${mode === "signup" ? 'Signup' : 'Login'} form submitted!`);
-    navigate('/'); 
-  }
+
+    if (mode === "signup" && password !== confirmPassword) {
+      setPasswordErrorMsg("Password and Confirm Password do not match!");
+      return;
+    }
+
+    try {
+      const endpoint = mode === "signup" ? "register" : "login";
+      const response = await fetch(`http://localhost:8080/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ userName, password }),
+      });
+
+      const data = await response.json();
+
+      if ((mode === "signup" && response.status === 201) || (mode === "login" && response.status === 200)) {
+        console.log(`${mode === "signup" ? 'Signup' : 'Login'} successful!`, data);
+        navigate('/');
+      } else {
+        console.error(`${mode === "signup" ? 'Signup' : 'Login'} failed:`, data);
+      }
+    } catch (error) {
+      console.error(`Error during ${mode === "signup" ? 'signup' : 'login'}:`, error);
+    }
+  };
 
   return (
     <div className="login-page">
@@ -19,19 +51,45 @@ function Auth({ mode = "login" }) {
         <form onSubmit={handleSubmit} action="#" method="post">
           <div className="form-group">
             <label htmlFor="username">User Name:</label>
-            <input type="text" id="username" name="username" required />
+            <input
+              type="text"
+              id="userName"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              name="username"
+              required
+            />
           </div>
 
           <div className="form-group">
             <label htmlFor="password">Password:</label>
-            <input type="password" id="password" name="password" required />
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              name="password"
+              required
+            />
           </div>
 
-  
           {mode === "signup" && (
             <div className="form-group">
-              <label htmlFor="repeat-password">Repeat Password:</label>
-              <input type="password" id="repeat-password" name="repeat-password" required />
+              <label htmlFor="repeat-password">Confirm Password:</label>
+              <input
+                type="password"
+                id="confirmPassword"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                name="confirm-password"
+                required
+              />
+            </div>
+          )}
+
+          {passwordErrorMsg && (
+            <div className="error-message">
+              {passwordErrorMsg}
             </div>
           )}
 
