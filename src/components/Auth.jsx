@@ -1,14 +1,24 @@
 import React, { useState } from "react";
+import bcrypt from 'bcrypt';
 import { useNavigate } from "react-router-dom";
 import './Auth.css';
 
 
 function Auth({ mode = "login" }) { 
+  const [primaryId, setPrimaryId] = useState("");
   const [passwordErrorMsg, setPasswordErrorMsg] = useState("");
   const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const navigate = useNavigate();
+
+  const saltRounds = 10;
+
+  bcrypt.genSalt(saltRounds, function(err, salt){
+    bcrypt.hash(password, salt, function(err, hash) {
+
+    });
+  });
 
   const handleSubmit = async (event) => {
     event.preventDefault(); 
@@ -27,7 +37,7 @@ function Auth({ mode = "login" }) {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ userName, password }),
+        body: JSON.stringify({ userName, hash}),
       });
 
       const data = await response.json();
@@ -35,8 +45,12 @@ function Auth({ mode = "login" }) {
       if ((mode === "signup" && response.status === 201) || (mode === "login" && response.status === 200)) {
         console.log(`${mode === "signup" ? 'Signup' : 'Login'} successful!`, data);
         navigate('/');
-      } else {
+      } else if ((mode === "signup" && response.status === 400) || (mode === "login" && response.status === 400 )) {
         console.error(`${mode === "signup" ? 'Signup' : 'Login'} failed:`, data);
+      } else if ((mode === "signup" && response.status === 401) || (mode === "login" && response.status === 401 )) {
+        console.error(`${mode === "signup" ? 'Signup' : 'Login'} failed:`, data);
+      } else if ((mode === "signup" && response.status === 409)) {
+        console.error(`${mode === "signup" } failed:`, data);
       }
     } catch (error) {
       console.error(`Error during ${mode === "signup" ? 'signup' : 'login'}:`, error);
