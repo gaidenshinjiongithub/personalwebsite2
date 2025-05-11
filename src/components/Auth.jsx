@@ -1,28 +1,42 @@
-import React, { useState } from "react";
-import bcrypt from 'bcrypt';
+import React, { useState, useEffect } from "react";
+import bcrypt from 'bcryptjs';
 import { useNavigate } from "react-router-dom";
+import Tooltip from "./Tooltip";
 import './Auth.css';
 
+function Auth({ mode = "login" }) {
+  const [tooltip, setTooltip] = useState({ message: "", type: "", visible: false });
 
-function Auth({ mode = "login" }) { 
-  const [primaryId, setPrimaryId] = useState("");
+  const [primaryId, setPrimaryId] = useState(() => localStorage.getItem("primaryId") || "");
   const [passwordErrorMsg, setPasswordErrorMsg] = useState("");
-  const [userName, setUserName] = useState("");
+  const [user_name, setUser_name] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [serverMessage, setServerMessage] = useState("");
   const navigate = useNavigate();
 
   const saltRounds = 10;
 
-  bcrypt.genSalt(saltRounds, function(err, salt){
-    bcrypt.hash(password, salt, function(err, hash) {
+  useEffect(() => {
+    if (primaryId) {
+      localStorage.setItem("primaryId", primaryId);
+    }
+    if (user_name) {
+      localStorage.setItem("userName", user_name);
+    }
+  }, [primaryId, user_name]);
 
-    });
-  });
+  const showTooltip = (message, type = "info", duration = 3000) => {
+    setTooltip({ message, type, visible: true });
+    setTimeout(() => {
+      setTooltip(prev => ({ ...prev, visible: false }));
+    }, duration);
+  };
 
   const handleSubmit = async (event) => {
-    event.preventDefault(); 
-    console.log(`${mode === "signup" ? 'Signup' : 'Login'} form submitted!`);
+    event.preventDefault();
+    setPasswordErrorMsg("");
+    setServerMessage("");
 
     if (mode === "signup" && password !== confirmPassword) {
       setPasswordErrorMsg("Password and Confirm Password do not match!");
@@ -31,29 +45,60 @@ function Auth({ mode = "login" }) {
 
     try {
       const endpoint = mode === "signup" ? "register" : "login";
-      const response = await fetch(`http://localhost:8080/${endpoint}`, {
+      let requestBody = { user_name };
+
+      if (mode === "signup") {
+        const salt = await bcrypt.genSalt(saltRounds);
+        const hashedPassword = await bcrypt.hash(password, salt);
+        requestBody.password = hashedPassword;
+      } else {
+        requestBody.password = password;
+      }
+
+      const response = await fetch(`http://localhost:5000/${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ userName, hash}),
+        body: JSON.stringify(requestBody),
       });
 
-      const data = await response.json();
+      const data = response.status !== 204 ? await response.json() : null;
 
-      if ((mode === "signup" && response.status === 201) || (mode === "login" && response.status === 200)) {
-        console.log(`${mode === "signup" ? 'Signup' : 'Login'} successful!`, data);
-        navigate('/');
-      } else if ((mode === "signup" && response.status === 400) || (mode === "login" && response.status === 400 )) {
-        console.error(`${mode === "signup" ? 'Signup' : 'Login'} failed:`, data);
-      } else if ((mode === "signup" && response.status === 401) || (mode === "login" && response.status === 401 )) {
-        console.error(`${mode === "signup" ? 'Signup' : 'Login'} failed:`, data);
-      } else if ((mode === "signup" && response.status === 409)) {
-        console.error(`${mode === "signup" } failed:`, data);
+      if (mode === "signup") {
+        if (response.status === 201) {
+          localStorage.setItem("primaryId", data.primaryId);
+          localStorage.setItem("userName", user_name);
+          setPrimaryId(data.primaryId);
+          showTooltip("Account created! Welcome aboard ✨", "success");
+          setTimeout(() => navigate('/'), 1000);
+        } else if (response.status === 409) {
+          setServerMessage("Username already exists. Please log in or use another.");
+          showTooltip("Username already exists. Try another one!", "error");
+        } else if (response.status === 400 || response.status === 401) {
+          setServerMessage("Signup failed. Please try again.");
+          showTooltip("Signup failed. Please try again.", "error");
+        }
+      } else {
+        if (response.status === 200) {
+          localStorage.setItem("primaryId", data.primaryId);
+          localStorage.setItem("userName", user_name);
+          setPrimaryId(data.primaryId);
+          showTooltip("Welcome back! You're in 💫", "success");
+          setTimeout(() => navigate('/'), 1000);
+        } else if (response.status === 400) {
+          setServerMessage("No account with that username. Please register.");
+          showTooltip("No account found with that username.", "error");
+        } else if (response.status === 401) {
+          setServerMessage("Incorrect password. Please try again.");
+          showTooltip("Incorrect password. Want to try again?", "error");
+        }
       }
     } catch (error) {
-      console.error(`Error during ${mode === "signup" ? 'signup' : 'login'}:`, error);
+      console.error("Error during auth:", error);
+      setServerMessage("Something went wrong. Please try again.");
+      showTooltip("Something went wrong. Try again later 😓", "error");
     }
   };
 
@@ -62,14 +107,22 @@ function Auth({ mode = "login" }) {
       <div className="registration-container">
         <h2>{mode === "signup" ? "Sign Up" : "Log In"}</h2>
 
+        {tooltip.visible && (
+          <Tooltip
+            message={tooltip.message}
+            type={tooltip.type}
+            visible={tooltip.visible}
+          />
+        )}
+
         <form onSubmit={handleSubmit} action="#" method="post">
           <div className="form-group">
             <label htmlFor="username">User Name:</label>
             <input
               type="text"
               id="userName"
-              value={userName}
-              onChange={(e) => setUserName(e.target.value)}
+              value={user_name}
+              onChange={(e) => setUser_name(e.target.value)}
               name="username"
               required
             />
@@ -104,6 +157,12 @@ function Auth({ mode = "login" }) {
           {passwordErrorMsg && (
             <div className="error-message">
               {passwordErrorMsg}
+            </div>
+          )}
+
+          {serverMessage && (
+            <div className="error-message">
+              {serverMessage}
             </div>
           )}
 
